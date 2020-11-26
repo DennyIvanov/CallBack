@@ -1,0 +1,267 @@
+{{ header }}{{ column_left }}
+<div id="content">
+	<div class="page-header">
+		<div class="container-fluid">
+			<ul class="breadcrumb">
+				{% for breadcrumb in breadcrumbs %}
+				<li><a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a></li>
+				{% endfor %}
+			</ul>
+		</div>
+		<div class="container-fluid">
+			<div class="pull-right">
+				<a href="{{ url_settings }}" data-toggle="tooltip" title="{{ button_settings }}" class="btn btn-info"><i
+						class="fa fa-cogs"></i></a>
+				<a href="{{ url_cancel }}" data-toggle="tooltip" title="{{ button_cancel }}" class="btn btn-default"><i
+						class="fa fa-reply"></i></a>
+			</div>
+			<h1>{{ heading_title }}</h1>
+		</div>
+	</div>
+	<div class="container-fluid">
+		{% if success %}
+		<div class="alert alert-success alert-dismissible"><i class="fa fa-check-circle"></i> {{ success }}
+			<button type="button" class="close" data-dismiss="alert">&times;</button>
+		</div>
+		{% endif %}
+		<div class="row">
+			<div id="callback-filter" class="col-md-3 col-md-push-9 col-sm-12 hidden-sm hidden-xs">
+				<div class="panel panel-default">
+					<div class="panel-heading">
+						<h3 class="panel-title"><i class="fa fa-filter"></i> {{ text_filter }}</h3>
+					</div>
+					<div class="panel-body">
+					</div>
+				</div>
+			</div>
+			<div id="callback-panel" class="col-md-9 col-md-pull-3 col-sm-12">
+				<div class="panel panel-default">
+					<div class="panel-heading">
+						<div class="pull-right">
+							<button type="button" data-toggle="tooltip" data-url="{{ url_remove }}" title="{{ button_remove }}"
+								class="btn btn-danger btn-sm" id="button-remove" data-warning="{{ title_warning }}"
+								data-error="{{ error_not_selected }}" data-confirm="{{ confirm_remove }}"><i
+									class="fa fa-trash-o"></i></button>
+							<button type="button" data-toggle="tooltip" data-url="{{ url_update }}" title="{{ button_update }}"
+								class="btn btn-primary btn-sm" id="button-update"><i class="fa fa-refresh"></i></button>
+						</div>
+						<h3 class="panel-title"><i class="fa fa-list"></i> {{ text_list }}</h3>
+					</div>
+					<div class="panel-body" id="items">
+						{{ view_items }}
+					</div>
+					<div class="panel-footer">{{ heading_title }} v{{ data_version }}</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{{ view_modal }}
+{{ footer }}
+<script>
+	$(document).ready(function () {
+		// Check/uncheck all checkbox action
+		$('#select-all').on('click', toggleAllCheckbox);
+
+		// Update items on clock main update action
+		$('#button-update').on('click', updateItems);
+		// Pagination.
+		$('#items').on('click', '#callback-nav-bottom a', function (event) {
+			event.preventDefault();
+			let url = $(this).attr('href');
+			let urlList = url.replace('items', 'list');
+			history.pushState(null, null, urlList);
+			updateItems(url);
+		});
+
+		// Delete item/items action
+		$('#items').on('click', '#list-items button.btn-danger', function () {
+			const id = $(this).attr('data-id');
+			if (confirm($('#button-remove').attr('data-confirm'))) {
+				$('input[name*="selected"]').prop('checked', false);
+				$('input[name*="selected"][value="' + id + '"]').prop('checked', true);
+				$('#list-items button').prop('disabled', true);
+				removeItems();
+			}
+		});
+		$('#button-remove').on('click', function () {
+			const button = $('#button-remove');
+			let checked = [];
+			$('input[name*="selected"]:checked').each(function () {
+				checked.push(this.value);
+			});
+
+			if (checked.length) {
+				if (confirm(button.attr('data-confirm'))) {
+					removeItems();
+				}
+			} else {
+				const warning = button.attr('data-warning');
+				const error = button.attr('data-error');
+				showAlert($('#callback-panel'), 'warning', warning, error);
+			}
+		});
+
+		// Begin Modal
+		// Show edit modal
+		$('#items').on('click', '#list-items button.btn-warning', function () {
+			const id = $(this).attr('data-id');
+			$('#callback-modal').modal('show');
+			$('#form-callback-modal').find('.form-control').prop('disabled', true);
+			$('#form-callback-modal').find('.btn').prop('disabled', true);
+			$('#form-callback-modal').find('.btn-default>i.fa').removeClass('fa-times').addClass('fa-spinner fa-pulse');
+			$('#form-callback-modal').find('.btn-primary>i.fa').removeClass('fa-floppy-o').addClass('fa-spinner fa-pulse');
+			getById(id);
+		});
+		// Action after hide modal
+		$('#callback-modal').on('hide.bs.modal', function (e) {
+			document.getElementById('form-callback-modal').reset();
+		})
+		// Update item from modal form
+		$('#form-callback-modal').on('click', 'button.btn-primary', update);
+
+		// Update item from modal data
+		function update() {
+			const url = $('#form-callback-modal').attr('action');
+
+			$('#form-callback-modal').find('.form-control').prop('readonly', true);
+			$('#form-callback-modal').find('.btn').prop('disabled', true);
+			$('#form-callback-modal').find('.btn-default>i.fa').removeClass('fa-times').addClass('fa-spinner fa-pulse');
+			$('#form-callback-modal').find('.btn-primary>i.fa').removeClass('fa-floppy-o').addClass('fa-spinner fa-pulse');
+
+			$.ajax({
+				type: 'post',
+				url: url,
+				data: $('#form-callback-modal').serialize(),
+				dataType: 'json',
+				success: function (response) {
+					$('#callback-modal').modal('hide');
+					updateItems();
+					showAlert($('#callback-panel'), response.status, response.title, response.text);
+				},
+				error: function (xhr, ajaxOptions, thrownError) {
+					alert(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
+				},
+				complete: function () {
+					$('#form-callback-modal').find('.form-control').prop('readonly', false);
+					$('#form-callback-modal').find('.btn').prop('disabled', false);
+					$('#form-callback-modal').find('.btn-default>i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-times');
+					$('#form-callback-modal').find('.btn-primary>i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-floppy-o');
+				}
+			});
+		}
+		// Get item data for modal
+		function getById(id) {
+			const url = $('#form-callback-list').attr('data-get');
+			$.ajax({
+				type: 'get',
+				url: url,
+				data: { callback_id: id },
+				dataType: 'json',
+				success: function (response) {
+					fillFormModal(response.callback, response.statuses);
+				},
+				error: function (xhr, ajaxOptions, thrownError) {
+					alert(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
+				},
+				complete: function () {
+					$('#form-callback-modal').find('.form-control').prop('disabled', false);
+					$('#form-callback-modal').find('.btn').prop('disabled', false);
+					$('#form-callback-modal').find('.btn-default>i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-times');
+					$('#form-callback-modal').find('.btn-primary>i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-floppy-o');
+				}
+			});
+		}
+		// Fill item data in modal
+		function fillFormModal(callback, statuses) {
+			$('#form-callback-id').val(callback.callback_id);
+			$('#form-callback-name').val(callback.name);
+			$('#form-callback-phone').val(callback.phone);
+			$('#form-callback-email').val(callback.email);
+			$('#form-callback-message').val(callback.message);
+			$('#form-callback-status').html('');
+			$.each(statuses, function (i, status) {
+				$('#form-callback-status').append($('<option>', {
+					value: status.callback_status_id,
+					text: status.name,
+					selected: status.callback_status_id == callback.callback_status_id ? true : false
+				}));
+			});
+		}
+		// End Modal
+
+		// Update items
+		function updateItems(pageUrl) {
+			$('button').tooltip('hide');
+			const button = $('#button-update');
+			const current = $('#callback-nav-bottom li.active').attr('data-current');
+			const url = (typeof pageUrl !== 'string') ? current : pageUrl;
+			let items = $("#items");
+
+			items.html('');
+			lockButtons();
+			button.find('i.fa').removeClass('fa-refresh').addClass('fa-spinner fa-pulse');
+
+			items.load(
+				url,
+				function (response, status, xhr) {
+					if (status === "error") {
+						let msg = "Error: ";
+						items.html(msg + xhr.status + " " + xhr.statusText);
+					}
+					unLockButtons();
+					button.find('i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-refresh');
+				}
+			);
+		}
+		// Remove items
+		function removeItems() {
+			const button = $('#button-remove');
+			const url = button.attr('data-url');
+
+			lockButtons();
+			button.find('i.fa').removeClass('fa-trash').addClass('fa-spinner fa-pulse');
+
+			$.ajax({
+				type: 'post',
+				url: url,
+				data: $('#form-callback-list').serialize(),
+				dataType: 'json',
+				success: function (response) {
+					unLockButtons();
+					updateItems();
+					showAlert($('#callback-panel'), response.status, response.title, response.text);
+				},
+				error: function (xhr, ajaxOptions, thrownError) {
+					alert(thrownError + "\r\n" + xhr.statusText + "\r\n" + xhr.responseText);
+				},
+				complete: function () {
+					button.find('i.fa').removeClass('fa-spinner fa-pulse').addClass('fa-trash');
+				}
+			});
+		}
+
+		// Lock main action buttons
+		function lockButtons() {
+			$('#button-update').prop('disabled', true);
+			$('#button-remove').prop('disabled', true);
+		}
+		// Unlock main action buttons
+		function unLockButtons() {
+			$('#button-update').prop('disabled', false);
+			$('#button-remove').prop('disabled', false);
+		}
+
+		// Toggle checkbox (select all)
+		function toggleAllCheckbox() {
+			$('input[name*="selected"]').prop('checked', this.checked);
+		}
+
+		// Alerts
+		function showAlert(block, color, title, text) {
+			block.find('> .alert').hide('slow');
+			let alertBlock = '<div class="alert alert-' + color + ' alert-dismissible" role="alert"><button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button><strong>' + title + ': </strong> ' + text + '</div>';
+			block.prepend(alertBlock);
+		}
+	});
+</script>

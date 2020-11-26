@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<modification>
+  <name>CallBack</name>
+  <code>callback</code>
+  <version>1.0</version>
+  <author>DenisIvanov</author>
+  <link>https://github.com/DennyIvanov</link>
+  <date>24.11.2020</date>
+  
+  <file path="catalog/controller/common/footer.php">
+    <operation>
+      <search trim="true"><![CDATA[return $this->load->view('common/footer', $data);]]></search>
+      <add position="before" trim="true"><![CDATA[
+        $data['callback_status'] = $this->config->get('module_callback_status');
+        $data['callback_data'] = $data['callback_status'] ? $this->load->controller('extension/module/callback') : '';
+      ]]></add>
+    </operation>
+  </file>
+  <file path="catalog/view/theme/default/template/common/footer.twig">
+    <operation>
+      <search trim="true"><![CDATA[</footer>]]></search>
+      <add position="after" trim="true"><![CDATA[
+        {% if callback_status %}
+          {{ callback_data }}
+        {% endif %}
+      ]]></add>
+    </operation>
+  </file>
+  
+</modification>
